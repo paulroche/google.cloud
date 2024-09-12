@@ -18,6 +18,7 @@ try:
     import google.auth
     import google.auth.compute_engine
     from google.oauth2 import service_account, credentials as oauth2
+    from google.auth import impersonated_credentials
     from google.auth.transport.requests import AuthorizedSession
     HAS_GOOGLE_LIBRARIES = True
 except ImportError:
@@ -200,9 +201,9 @@ class GcpSession(object):
         if not HAS_GOOGLE_LIBRARIES:
             self.module.fail_json(msg="Please install the google-auth library")
 
-        if self.module.params.get('service_account_email') is not None and self.module.params['auth_kind'] != 'machineaccount':
+        if self.module.params.get('service_account_email') is not None and not self.module.params['auth_kind'] in ['machineaccount','serviceaccount']:
             self.module.fail_json(
-                msg="Service Account Email only works with Machine Account-based authentication"
+                msg="Service Account Email only works with Machine or Service Account-based authentication"
             )
 
         if (self.module.params.get('service_account_file') is not None or
@@ -226,6 +227,7 @@ class GcpSession(object):
         if cred_type == 'serviceaccount':
             service_account_file = self.module.params.get('service_account_file')
             service_account_contents = self.module.params.get('service_account_contents')
+            service_account_email = self.module.params.get('service_account_email')
             if service_account_file is not None:
                 path = os.path.realpath(os.path.expanduser(service_account_file))
                 try:
@@ -246,7 +248,16 @@ class GcpSession(object):
                 self.module.fail_json(
                     msg='Service Account authentication requires setting either service_account_file or service_account_contents'
                 )
-            return svc_acct_creds.with_scopes(self.module.params['scopes'])
+            if service_account_email is not None:
+                try:
+                    impersonate_svc_creds = impersonated_credentials.Credentials(svc_acct_creds, service_account_email, self.module.params['scopes'])
+                except google.auth.exceptions.RefreshError as e
+                    self.module.fail_json(
+                        msg="Unable to impersonate account: %s" % e
+                    )
+                return impersonate_svc_creds.with_scopes(self.module.params['scopes'])
+            else:
+                return svc_acct_creds.with_scopes(self.module.params['scopes'])
 
         if cred_type == 'machineaccount':
             email = self.module.params['service_account_email']

@@ -32,8 +32,9 @@ options:
         type: path
     service_account_email:
         description:
-            - An optional service account email address if machineaccount is selected
+            - An optional service account email address if machineaccount or serviceaccount is selected
               and the user does not wish to use the default email.
+            - When used with serviceaccount, this is used for impersonation.
         type: str
     scopes:
         description:
